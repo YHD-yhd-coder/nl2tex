@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+/** 本地服务：网页 UI + JSON 接口（只监听 127.0.0.1） */
+
+import { createServer } from 'node:http'
+import { readFile, stat } from 'node:fs/promises'
+import { dirname, extname, join, normalize as pathNormalize } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { nl2latex } from './src/core.mjs'
+import { resolveAuth, config } from './src/providers.mjs'
+import { SUBJECT_KEYS } from './src/prompt.mjs'
+import { hasMhchem } from './src/validate.mjs'
+
+const ROOT = dirname(fileURLToPath(import.meta.url))
+const PORT = Number(process.env.PORT || 8777)
+const KATEX_DIR = join(ROOT, 'node_modules', 'katex', 'dist')
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.ttf': 'font/ttf',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+}
+
+async function send(res, status, body, type = 'application/json; charset=utf-8') {
+  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' })
+  res.end(body)
+}
+
+async function serveFile(res, file) {
+  try {
+    const s = await stat(file)
+    if (!s.isFile()) throw new Error('not file')
+    const data = await readFile(file)
+    res.writeHead(200, {
+      'content-type': MIME[extname(file)] ?? 'application/octet-stream',
+      'cache-control': 'public, max-age=3600',
+    })
+    res.end(data)
+  } catch {
+    await send(res, 404, JSON.stringify({ error: 'not found' }))
+  }
+}
+
+async function readJson(req, limit = 64 * 1024) {
+  const chunks = []
+  let size = 0
+  for await (const chunk of req) {
+    size += chunk.length
+    if (size > limit) throw new Error('请求体过大')
+    chunks.push(chunk)
+  }
+  if (!chunks.length) return {}
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
+  const path = url.pathname
+
+  try {
+    if (req.method === 'GET' && (path === '/' || path === '/index.html')) {
+      return serveFile(res, join(ROOT, 'public', 'index.html'))
+    }
+
+    if (req.method === 'GET' && path.startsWith('/katex/')) {
+      const rel = pathNormalize(path.slice('/katex/'.length))
+      if (rel.includes('..')) return send(res, 400, '{"error":"bad path"}')
+      return serveFile(res, join(KATEX_DIR, rel))
+    }
+
+    if (req.method === 'GET' && path === '/api/health') {
+      let auth = 'none'
+      try {
+        auth = resolveAuth().kind
+      } catch {}
+      return send(
+        res,
+        200,
+        JSON.stringify({
+          ok: true,
+          auth,
+          model: config.model,
+          subjects: SUBJECT_KEYS,
+          mhchem: hasMhchem(),
+          version: '0.1.0',
+        }),
+      )
+    }
+
+    if (req.method === 'POST' && path === '/api/nl2tex') {
+      const body = await readJson(req)
+      if (!body.text || typeof body.text !== 'string') {
+        return send(res, 400, JSON.stringify({ error: '缺少 text 字段' }))
+      }
+      const result = await nl2latex(body.text, {
+        subject: body.subject,
+        model: body.model,
+        thinking: !!body.thinking,
+        cache: body.cache !== false,
+      })
+      return send(res, 200, JSON.stringify(result))
+    }
+
+    return send(res, 404, JSON.stringify({ error: 'not found' }))
+  } catch (e) {
+    return send(res, 500, JSON.stringify({ error: String(e.message || e) }))
+  }
+})
+
+server.listen(PORT, '127.0.0.1', () => {
+  let auth = '未配置'
+  try {
+    auth = resolveAuth().kind
+  } catch {}
+  console.log(`nl2tex 已启动  http://127.0.0.1:${PORT}`)
+  console.log(`鉴权方式     ${auth}`)
+  console.log(`默认模型     ${config.model}`)
+  console.log(`按 Ctrl+C 停止`)
+})

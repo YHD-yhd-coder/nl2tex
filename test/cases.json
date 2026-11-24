@@ -1,0 +1,22 @@
+[
+  { "input": "求 k 从 1 到 n 的 k 平方", "subject": "math", "expectAny": ["\\sum_{k=1}^{n}", "\\sum_{k = 1}^{n}"] },
+  { "input": "x 的平方加 y 的平方等于 1", "subject": "math", "expectAny": ["x^2", "x^{2}"] },
+  { "input": "积分从 0 到无穷 e 的负 x 平方 dx", "subject": "math", "expectAny": ["\\int_{0}^{\\infty}", "\\int_0^\\infty"] },
+  { "input": "括号 a 加 b 的平方", "subject": "math", "expectAny": ["(a+b)^2", "(a + b)^2", "(a+b)^{2}"] },
+  { "input": "二分之 a 加 b", "subject": "math", "expectAny": ["\\frac"] },
+  { "input": "根号下 x 平方加 y 平方", "subject": "math", "expectAny": ["\\sqrt"] },
+  { "input": "lim x 趋于 0 sinx 除以 x", "subject": "math", "expectAny": ["\\lim"] },
+  { "input": "n 的阶乘", "subject": "math", "expectAny": ["!"] },
+  { "input": "矩阵 第一行 a b 第二行 c d", "subject": "math", "expectAny": ["matrix"] },
+  { "input": "分段函数 x 大于 0 时等于 1 否则等于 0", "subject": "math", "expectAny": ["cases"] },
+  { "input": "组合数 C 从 n 取 k", "subject": "math", "expectAny": ["\\binom", "C_"] },
+  { "input": "从 k 等于 1 到无穷 1 比上 k 的平方", "subject": "math", "expectAny": ["\\sum"] },
+  { "input": "牛顿第二定律", "subject": "physics", "expectAny": ["F"] },
+  { "input": "动能公式", "subject": "physics", "expectAny": ["\\frac{1}{2}"] },
+  { "input": "万有引力定律", "subject": "physics", "expectAny": ["G"] },
+  { "input": "水的化学式", "subject": "chemistry", "expectAny": ["\\ce", "H_2O", "H_{2}O"] },
+  { "input": "氢气加氧气生成水", "subject": "chemistry", "expectAny": ["\\ce", "H_2", "H_{2}"] },
+  { "input": "冒泡排序的时间复杂度", "subject": "cs", "expectAny": ["O"] },
+  { "input": "期望的平方", "subject": "economics", "expectAny": ["E"] },
+  { "input": "孟德尔一对相对性状的基因型比例", "subject": "biology", "expectAny": ["text", "Aa", "1:2:1"] }
+]

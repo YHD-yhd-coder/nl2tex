@@ -1,0 +1,20 @@
+{
+  "name": "nl2tex",
+  "version": "0.1.0",
+  "description": "把中文/英文的自然语言描述转成可编译的 LaTeX 公式，并做 KaTeX 编译校验",
+  "type": "module",
+  "license": "MIT",
+  "main": "src/core.mjs",
+  "bin": { "nl2tex": "cli.mjs" },
+  "files": ["src", "public", "server.mjs", "cli.mjs", "README.md", "LICENSE"],
+  "scripts": {
+    "start": "node server.mjs",
+    "cli": "node cli.mjs",
+    "test": "node test/run.mjs",
+    "bench": "node bench.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "katex": "^0.16.11"
+  }
+}

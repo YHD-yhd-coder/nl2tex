@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>nl2tex · 自然语言转公式</title>
+<link rel="stylesheet" href="/katex/katex.min.css" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #262b36;
+    --text: #e6e8ee;
+    --muted: #8b93a7;
+    --accent: #4f8cff;
+    --ok: #3fb950;
+    --warn: #d29922;
+    --err: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 40px 20px 80px; }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: .5px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.ok { color: var(--ok); border-color: #1f6f2f; }
+  .badge.warn { color: var(--warn); border-color: #6b4f13; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 18px; }
+  textarea {
+    width: 100%; min-height: 92px; resize: vertical; background: #0d0f13; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px; font: inherit; outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  select, button {
+    background: #1d222b; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font: inherit; cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .55; cursor: default; }
+  label.toggle { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; cursor: pointer; }
+  .spacer { flex: 1; }
+
+  .result { margin-top: 18px; }
+  .math { overflow-x: auto; padding: 14px 4px; }
+  .math .katex-display { margin: 0; }
+  .src {
+    font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: #0d0f13;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; white-space: pre-wrap;
+    word-break: break-all; color: #b9c4dc;
+  }
+  .meta { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .note { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--warn); background: #1d1a12; color: #e3c98a; border-radius: 6px; font-size: 13px; }
+  .err { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--err); background: #1f1315; color: #f0a5a5; border-radius: 6px; font-size: 13px; }
+  .history { list-style: none; padding: 0; margin: 8px 0 0; }
+  .history li { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); cursor: pointer; }
+  .history li:hover { color: var(--text); }
+  .history code { color: #9fb4dc; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>nl2tex</h1>
+    <span class="sub">自然语言 → LaTeX → 编译校验</span>
+    <span class="spacer"></span>
+    <span id="status" class="badge">检测中…</span>
+  </header>
+
+  <div class="card">
+    <textarea id="input" placeholder="例如：求 k 从 1 到 n 的 k 平方&#10;或者：积分从 0 到无穷 e 的负 x 平方 dx&#10;Ctrl / ⌘ + Enter 直接生成"></textarea>
+    <div class="row">
+      <select id="subject">
+        <option value="math">数学</option>
+        <option value="physics">物理</option>
+        <option value="chemistry">化学</option>
+        <option value="cs">计算机</option>
+        <option value="economics">经济/统计</option>
+        <option value="biology">生物</option>
+      </select>
+      <label class="toggle"><input type="checkbox" id="thinking" /> 深度思考（慢，仅歧义时用）</label>
+      <span class="spacer"></span>
+      <button id="go" class="primary">生成公式</button>
+    </div>
+    <div class="hint">不计算、不化简，只做转写；有歧义时会给低置信度和说明。</div>
+  </div>
+
+  <div class="card result" id="resultCard" hidden>
+    <div class="math" id="math"></div>
+    <div class="src" id="src"></div>
+    <div class="meta" id="meta"></div>
+    <div class="note" id="note" hidden></div>
+    <div class="err" id="err" hidden></div>
+    <div class="row">
+      <button id="copyTex">复制 LaTeX</button>
+      <button id="copyDollar">复制 $...$</button>
+      <button id="again">重试</button>
+      <span class="spacer"></span>
+      <span class="hint" id="timing"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sub">最近生成</div>
+    <ul class="history" id="history"></ul>
+  </div>
+</div>
+
+<script src="/katex/katex.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id)
+const input = $('input'), subject = $('subject'), thinking = $('thinking')
+const go = $('go'), card = $('resultCard'), math = $('math'), src = $('src')
+const meta = $('meta'), note = $('note'), err = $('err'), timing = $('timing')
+let current = null
+let history = []
+
+fetch('/api/health').then(r => r.json()).then(h => {
+  const s = $('status')
+  s.textContent = `鉴权 ${h.auth} · ${h.model}`
+  s.className = 'badge ' + (h.auth === 'none' ? 'warn' : 'ok')
+}).catch(() => {})
+
+function render(result) {
+  current = result
+  card.hidden = false
+  math.innerHTML = result.html || ''
+  src.textContent = result.latex || '(空)'
+  const conf = result.confidence ?? 0
+  meta.innerHTML = [
+    `<span style="color:${result.valid ? 'var(--ok)' : 'var(--err)'}">${result.valid ? '编译通过' : '编译失败'}</span>`,
+    `<span>置信度 ${conf.toFixed(2)}</span>`,
+    `<span>${result.subject}</span>`,
+    result.retried ? '<span>已重试一次</span>' : '',
+    result.cached ? '<span>缓存命中</span>' : '',
+  ].filter(Boolean).join('')
+
+  note.hidden = !result.note
+  note.textContent = result.note || ''
+  err.hidden = result.valid
+  err.textContent = result.valid ? '' : (result.error || '未知错误')
+  timing.textContent = `${result.ms} ms`
+}
+
+function addHistory(text, latex) {
+  history.unshift({ text, latex })
+  history = history.slice(0, 8)
+  $('history').innerHTML = history
+    .map((h, i) => `<li data-i="${i}"><span>${escapeHtml(h.text)}</span> → <code>${escapeHtml(h.latex)}</code></li>`)
+    .join('')
+  document.querySelectorAll('#history li').forEach(li => {
+    li.onclick = () => { input.value = history[Number(li.dataset.i)].text; input.focus() }
+  })
+}
+const escapeHtml = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+async function run() {
+  const text = input.value.trim()
+  if (!text) { input.focus(); return }
+  go.disabled = true; go.textContent = '生成中…'
+  try {
+    const res = await fetch('/api/nl2tex', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text, subject: subject.value, thinking: thinking.checked }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+    render(data)
+    if (data.valid && data.latex) addHistory(text, data.latex)
+  } catch (e) {
+    card.hidden = false
+    math.innerHTML = ''
+    src.textContent = ''
+    meta.innerHTML = ''
+    note.hidden = true
+    err.hidden = false
+    err.textContent = String(e.message || e)
+  } finally {
+    go.disabled = false; go.textContent = '生成公式'
+  }
+}
+
+go.onclick = run
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run() }
+})
+$('copyTex').onclick = () => current && navigator.clipboard.writeText(current.latex)
+$('copyDollar').onclick = () => current && navigator.clipboard.writeText(`$${current.latex}$$`)
+$('again').onclick = run
+</script>
+</body>
+</html>
