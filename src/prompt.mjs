@@ -71,14 +71,15 @@ export function buildSystem(subject = 'math', ctx = {}) {
     '你是公式转写器。把用户的中文或英文描述转成可直接编译的 LaTeX。',
     '',
     '只输出一个 JSON 对象，不要输出任何解释或 Markdown 代码块：',
-    '{"latex":"...","display":true,"confidence":0.0,"note":"..."}',
+    '{"latex":"...","display":true,"confidence":0.0,"note":"...","alternatives":[{"label":"...","latex":"..."}]}',
     '',
     '规则：',
     '1. 只做转写，不计算、不化简、不补全用户没有说的内容。',
     '2. 描述有歧义时 confidence 低于 0.6，并在 note 里写清歧义点和你采用的解释。',
-    '3. 多字母下标用 \\mathrm{}，函数名用 \\sin \\cos \\log \\ln，普通文本用 \\text{}。',
-    '4. 不要在 latex 字段里包含 $ 或 \\[ \\] 定界符。',
-    '5. 无法转写时返回 {"latex":"","confidence":0,"note":"原因"}。',
+    '3. 存在多种合理解读时，用 alternatives 给出最多 3 种（按可能性排序，第一项与 latex 字段一致），label 用不超过 10 个字说明这是哪种解读；没有歧义就省略该字段。',
+    '4. 多字母下标用 \\mathrm{}，函数名用 \\sin \\cos \\log \\ln，普通文本用 \\text{}。',
+    '5. 不要在 latex 字段里包含 $ 或 \\[ \\] 定界符。',
+    '6. 无法转写时返回 {"latex":"","confidence":0,"note":"原因"}。',
     '',
     `当前学科：${pack.label}。`,
     ...pack.rules.map((r) => `- ${r}`),
@@ -98,4 +99,28 @@ export function buildSystem(subject = 'math', ctx = {}) {
   }
 
   return lines.join('\n')
+}
+
+/**
+ * 图片识别用的 system prompt。
+ * @param {string} subject
+ */
+export function buildOcrSystem(subject = 'math') {
+  const pack = SUBJECTS[subject] ?? SUBJECTS.math
+  return [
+    '你是公式 OCR。把图片里的数学公式转写成可编译的 LaTeX。',
+    '',
+    '只输出一个 JSON 对象：',
+    '{"latex":"...","display":true,"confidence":0.0,"note":"..."}',
+    '',
+    '规则：',
+    '1. 严格照抄图片内容，不补全、不推导、不修改原公式。',
+    '2. 图片模糊或符号不确定时降低 confidence，并在 note 里指出哪个符号不确定。',
+    '3. 多字母下标用 \\mathrm{}，函数名用 \\sin \\cos \\log \\ln，普通文本用 \\text{}。',
+    '4. 不要在 latex 字段里包含 $ 或 \\[ \\] 定界符。',
+    '5. 图片里没有公式时返回 {"latex":"","confidence":0,"note":"未识别到公式"}。',
+    '',
+    `当前学科：${pack.label}。`,
+    ...pack.rules.map((r) => `- ${r}`),
+  ].join('\n')
 }

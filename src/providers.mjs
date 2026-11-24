@@ -52,13 +52,37 @@ export async function chat({
   maxTokens = 512,
   thinking = false,
   timeoutMs = 30000,
+  image = null,
 }) {
   const auth = resolveAuth()
+
+  // 有图片时，把最后一条 user 消息改成多模态内容块
+  const finalMessages = image
+    ? messages.map((m, i) =>
+        i === messages.length - 1 && m.role === 'user'
+          ? {
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: image.mediaType || 'image/png',
+                    data: image.data,
+                  },
+                },
+                { type: 'text', text: m.content },
+              ],
+            }
+          : m,
+      )
+    : messages
+
   const body = {
     model,
     max_tokens: maxTokens,
     thinking: { type: thinking ? 'enabled' : 'disabled' },
-    messages,
+    messages: finalMessages,
   }
 
   const t0 = performance.now()

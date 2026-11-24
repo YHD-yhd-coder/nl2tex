@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="./node_modules/katex/dist/katex.min.css" />
+<style>
+  body { margin: 0; background: #fff; display: flex; align-items: center; justify-content: center; height: 220px; }
+  #x { font-size: 42px; color: #000; }
+</style>
+</head>
+<body>
+<div id="x"></div>
+<script src="./node_modules/katex/dist/katex.min.js"></script>
+<script>
+  katex.render('\\int_0^{\\infty} e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}', document.getElementById('x'), {
+    displayMode: true,
+    throwOnError: false,
+  })
+</script>
+</body>
+</html>

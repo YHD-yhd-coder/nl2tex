@@ -6,10 +6,11 @@ import { readFile, stat } from 'node:fs/promises'
 import { dirname, extname, join, normalize as pathNormalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { nl2latex } from './src/core.mjs'
+import { nl2latex, nl2latexFromImage } from './src/core.mjs'
 import { resolveAuth, config } from './src/providers.mjs'
 import { SUBJECT_KEYS } from './src/prompt.mjs'
 import { hasMhchem } from './src/validate.mjs'
+import { toMathML, toOMML } from './src/export.mjs'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 8777)
@@ -104,6 +105,31 @@ const server = createServer(async (req, res) => {
         cache: body.cache !== false,
       })
       return send(res, 200, JSON.stringify(result))
+    }
+
+    if (req.method === 'POST' && path === '/api/ocr') {
+      const body = await readJson(req, 24 * 1024 * 1024)
+      if (!body.image || typeof body.image !== 'string') {
+        return send(res, 400, JSON.stringify({ error: '缺少 image 字段（dataURL 或 base64）' }))
+      }
+      const result = await nl2latexFromImage(
+        { data: body.image, mediaType: body.mediaType || 'image/png' },
+        { subject: body.subject, thinking: !!body.thinking },
+      )
+      return send(res, 200, JSON.stringify(result))
+    }
+
+    if (req.method === 'POST' && path === '/api/export') {
+      const body = await readJson(req)
+      if (!body.latex) return send(res, 400, JSON.stringify({ error: '缺少 latex 字段' }))
+      const display = body.display !== false
+      if (body.to === 'mathml') {
+        return send(res, 200, JSON.stringify({ to: 'mathml', content: toMathML(body.latex, { display }) }))
+      }
+      if (body.to === 'omml') {
+        return send(res, 200, JSON.stringify({ to: 'omml', content: toOMML(body.latex, { display }) }))
+      }
+      return send(res, 400, JSON.stringify({ error: "to 只能是 'mathml' 或 'omml'" }))
     }
 
     return send(res, 404, JSON.stringify({ error: 'not found' }))

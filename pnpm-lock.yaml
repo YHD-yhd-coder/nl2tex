@@ -11,6 +11,9 @@ importers:
       katex:
         specifier: ^0.16.11
         version: 0.16.47
+      mathml2omml:
+        specifier: ^0.5.0
+        version: 0.5.0
 
 packages:
 
@@ -22,6 +25,9 @@ packages:
     resolution: {integrity: sha512-Eeo8Ys1doU1z+x8AZsPpQu+p/QcZBI5PeOo7QGQdy2x2m0MU/hYagBbGOmXwr5KVbEfVuWv9LpnQWeehogurjg==}
     hasBin: true
 
+  mathml2omml@0.5.0:
+    resolution: {integrity: sha512-4eLs37a+TH+CL/M5XZZrlc75SNRJNPiZzIaeSSvH0UFCRaCdSYRHWvrlA7MUbeQks/z4sVhfg+GlcZhVVUHzqg==}
+
 snapshots:
 
   commander@8.3.0: {}
@@ -29,3 +35,5 @@ snapshots:
   katex@0.16.47:
     dependencies:
       commander: 8.3.0
+
+  mathml2omml@0.5.0: {}

@@ -18,7 +18,9 @@
 ## 特性
 
 - **编译校验**：每条结果都过 KaTeX，失败自动带错误重试一次，不会给你一段贴进去就报错的代码
-- **歧义显式化**：`confidence` + `note`，低于 0.6 会告诉你它在哪猜了
+- **歧义显式化**：`confidence` + `note`，低于 0.6 会告诉你它在哪猜了，并给出最多 3 个候选解读
+- **图片识别**：直接 `Ctrl+V` 粘贴公式截图，或选图片，走同一个模型（`deepseek-flash` 原生视觉）
+- **多种导出**：LaTeX、`$...$`、MathML、Word 公式（OMML）
 - **六个学科**：数学 / 物理 / 化学 / 计算机 / 经济统计 / 生物，各有专属规则（化学强制 `\ce{}`、物理带单位写法等）
 - **两种鉴权**：复用本机 DSH 已登录的 DeepSeek 账号，或自己的 API Key
 - **本地优先**：只监听 `127.0.0.1`，公式不出本机（除了发给模型）
@@ -67,12 +69,30 @@ POST /api/nl2tex
 {
   "latex": "\\sum \\frac{1}{n^3+nx}",
   "valid": true,
-  "confidence": 0.3,
-  "note": "用户未说明求和上下限，故不补全……",
+  "confidence": 0.45,
+  "note": "未给出求和上下限与求和变量……",
+  "alternatives": [
+    { "label": "推荐", "latex": "\\sum \\frac{1}{n^3+nx}" },
+    { "label": "分拆为两项", "latex": "\\sum \\left(\\frac{1}{n^3}+nx\\right)" }
+  ],
   "html": "<span class=\"katex\">…</span>",
   "usage": { "input_tokens": 244, "output_tokens": 72 },
-  "ms": 1574
+  "ms": 1928
 }
+```
+
+图片识别：
+
+```http
+POST /api/ocr
+{ "image": "<base64 或 dataURL>", "mediaType": "image/png", "subject": "math" }
+```
+
+导出：
+
+```http
+POST /api/export
+{ "latex": "\\frac{a}{b}", "to": "mathml" }   // 或 "omml"
 ```
 
 `GET /api/health` 返回鉴权方式、模型、学科列表。
@@ -80,8 +100,9 @@ POST /api/nl2tex
 ## 评测
 
 ```bash
-pnpm test     # 20 条用例，输出编译通过率 / 关键词命中率 / 耗时 / 花费
-pnpm bench    # 延迟分位
+pnpm test        # 20 条文本用例
+pnpm test:ocr    # 图片识别冒烟测试（用 test/fixtures/formula.png）
+pnpm bench       # 延迟分位
 ```
 
 当前基线（`deepseek-flash`，关思考）：
@@ -119,10 +140,12 @@ KaTeX 以 `trust: false` 渲染，并拒绝 `\href`、`\includegraphics`、`\new
 
 ## 路线图
 
+- [x] 歧义时返回 2–3 个候选
+- [x] MathML / Word（OMML）导出
+- [x] 截图识别（粘贴即用）
 - [ ] DSH 输入框插件（在聊天框里直接按按钮生成）
-- [ ] 歧义时返回 2–3 个候选，而不是只给一个
-- [ ] Word / MathML / Typst 导出
-- [ ] 截图/手写识别入口
+- [ ] 手写笔迹识别（不依赖图片）
+- [ ] 历史记录持久化
 
 ## 许可
 
