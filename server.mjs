@@ -37,9 +37,10 @@ async function serveFile(res, file) {
     const s = await stat(file)
     if (!s.isFile()) throw new Error('not file')
     const data = await readFile(file)
+    const ext = extname(file)
     res.writeHead(200, {
-      'content-type': MIME[extname(file)] ?? 'application/octet-stream',
-      'cache-control': 'public, max-age=3600',
+      'content-type': MIME[ext] ?? 'application/octet-stream',
+      'cache-control': ext === '.html' ? 'no-store' : 'public, max-age=3600',
     })
     res.end(data)
   } catch {
@@ -88,7 +89,7 @@ const server = createServer(async (req, res) => {
           model: config.model,
           subjects: SUBJECT_KEYS,
           mhchem: hasMhchem(),
-          version: '0.1.0',
+          version: '0.3.0',
         }),
       )
     }
@@ -103,6 +104,7 @@ const server = createServer(async (req, res) => {
         model: body.model,
         thinking: !!body.thinking,
         cache: body.cache !== false,
+        apiKey: req.headers['x-nl2tex-key'],
       })
       return send(res, 200, JSON.stringify(result))
     }
@@ -114,7 +116,11 @@ const server = createServer(async (req, res) => {
       }
       const result = await nl2latexFromImage(
         { data: body.image, mediaType: body.mediaType || 'image/png' },
-        { subject: body.subject, thinking: !!body.thinking },
+        {
+          subject: body.subject,
+          thinking: !!body.thinking,
+          apiKey: req.headers['x-nl2tex-key'],
+        },
       )
       return send(res, 200, JSON.stringify(result))
     }

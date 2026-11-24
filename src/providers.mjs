@@ -14,25 +14,37 @@ const DSH_HOME = process.env.DSH_HOME || join(homedir(), '.dsh')
 
 /** 从 DSH 凭据文件读取账号 token（只读，不打印） */
 export function readDshToken() {
-  const file = join(DSH_HOME, '.credentials.yaml')
-  if (!existsSync(file)) return null
-  const raw = readFileSync(file, 'utf8')
-  const m = raw.match(/token:\s*(\S+)[\s\S]*?issuer:\s*(\S+)/)
-  return m ? m[1] : null
+  try {
+    const file = join(DSH_HOME, '.credentials.yaml')
+    if (!existsSync(file)) return null
+    const raw = readFileSync(file, 'utf8')
+    const m = raw.match(/token:\s*(\S+)[\s\S]*?issuer:\s*(\S+)/)
+    return m ? m[1] : null
+  } catch {
+    return null
+  }
 }
 
-/** 决定用哪种鉴权，返回 { kind, headers } */
-export function resolveAuth() {
+/**
+ * 决定用哪种鉴权，返回 { kind, headers }
+ * 优先级：调用方传入的 key > 环境变量 > DSH 本地登录态
+ * @param {string} [userKey] 用户在网页里填的 Key（只存在浏览器 localStorage）
+ */
+export function resolveAuth(userKey) {
+  const explicit = (userKey || '').trim()
+  if (explicit) {
+    return { kind: 'user-key', headers: { 'x-api-key': explicit } }
+  }
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim()
   if (apiKey) {
-    return { kind: 'apikey', headers: { 'x-api-key': apiKey } }
+    return { kind: 'env-key', headers: { 'x-api-key': apiKey } }
   }
   const token = readDshToken()
   if (token) {
     return { kind: 'dsh', headers: { 'x-dsh-auth-token': token } }
   }
   throw new Error(
-    '没有可用的凭据：请设置 DEEPSEEK_API_KEY，或在 DSH 中登录 DeepSeek 账号',
+    '没有可用的凭据：请在页面右上角填入自己的 DeepSeek API Key，或设置 DEEPSEEK_API_KEY 环境变量',
   )
 }
 
@@ -53,8 +65,9 @@ export async function chat({
   thinking = false,
   timeoutMs = 30000,
   image = null,
+  apiKey = null,
 }) {
-  const auth = resolveAuth()
+  const auth = resolveAuth(apiKey)
 
   // 有图片时，把最后一条 user 消息改成多模态内容块
   const finalMessages = image
@@ -115,7 +128,6 @@ export async function chat({
     model: data.model ?? model,
     auth: auth.kind,
     ms,
-  }
-}
+  }}
 
 export const config = { base: DEFAULT_BASE, model: DEFAULT_MODEL }

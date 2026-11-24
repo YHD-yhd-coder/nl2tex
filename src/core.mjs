@@ -111,7 +111,7 @@ function addUsage(a = {}, b = {}) {
  * @param {boolean} p.thinking
  * @param {{data:string, mediaType:string}|null} p.image
  */
-async function generate({ text, subject, model, thinking, image }) {
+async function generate({ text, subject, model, thinking, image, apiKey }) {
   const system = image ? buildOcrSystem(subject) : buildSystem(subject)
   const userText = image ? '识别图片中的公式。' : text
 
@@ -121,7 +121,7 @@ async function generate({ text, subject, model, thinking, image }) {
   ]
 
   const started = performance.now()
-  const first = await chat({ messages, model, thinking, image })
+  const first = await chat({ messages, model, thinking, image, apiKey })
   let usage = { ...first.usage }
   let parsed
   let compile
@@ -147,7 +147,7 @@ async function generate({ text, subject, model, thinking, image }) {
       },
       { role: 'user', content: userText },
     ]
-    const second = await chat({ messages: retryMessages, model, thinking: false, image })
+    const second = await chat({ messages: retryMessages, model, thinking: false, image, apiKey })
     usage = addUsage(usage, second.usage)
     parsed = parseModelJson(second.text)
     compile = validate(parsed.latex, { display: parsed.display })
@@ -188,7 +188,7 @@ function finalize({ input, subject, gen, mode }) {
 /**
  * 自然语言 -> LaTeX
  * @param {string} text
- * @param {{subject?:string, model?:string, cache?:boolean, thinking?:boolean}} [opts]
+ * @param {{subject?:string, model?:string, cache?:boolean, thinking?:boolean, apiKey?:string}} [opts]
  */
 export async function nl2latex(text, opts = {}) {
   const input = String(text ?? '').trim()
@@ -204,7 +204,14 @@ export async function nl2latex(text, opts = {}) {
     if (hit) return { ...hit, cached: true }
   }
 
-  const gen = await generate({ text: input, subject, model, thinking: !!opts.thinking, image: null })
+  const gen = await generate({
+    text: input,
+    subject,
+    model,
+    thinking: !!opts.thinking,
+    image: null,
+    apiKey: opts.apiKey,
+  })
   const result = finalize({ input, subject, gen, mode: 'text' })
 
   if (useCache && result.valid) {
@@ -217,7 +224,7 @@ export async function nl2latex(text, opts = {}) {
 /**
  * 图片 -> LaTeX
  * @param {{data:string, mediaType?:string}} image  base64（不带 data: 前缀）
- * @param {{subject?:string, model?:string, thinking?:boolean}} [opts]
+ * @param {{subject?:string, model?:string, thinking?:boolean, apiKey?:string}} [opts]
  */
 export async function nl2latexFromImage(image, opts = {}) {
   if (!image?.data) throw new Error('缺少图片数据')
@@ -233,6 +240,7 @@ export async function nl2latexFromImage(image, opts = {}) {
     model,
     thinking: !!opts.thinking,
     image: { data, mediaType: image.mediaType || 'image/png' },
+    apiKey: opts.apiKey,
   })
 
   return finalize({

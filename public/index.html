@@ -56,7 +56,22 @@
     <span class="sub">自然语言 / 图片 → LaTeX → 编译校验</span>
     <span class="spacer"></span>
     <span id="status" class="badge">检测中…</span>
+    <button id="settingsBtn" style="padding:5px 10px;font-size:12px">⚙ 设置</button>
   </header>
+
+  <div class="card" id="settingsCard" hidden>
+    <div class="sub" style="margin-bottom:8px">DeepSeek API Key（自带 Key，费用由你自己承担）</div>
+    <div class="row" style="margin-top:0">
+      <input id="keyInput" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false"
+             style="flex:1;min-width:260px;background:#0d0f13;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font:inherit" />
+      <button id="keySave" class="primary">保存</button>
+      <button id="keyClear">清除</button>
+    </div>
+    <div class="hint">
+      只保存在你这台机器的浏览器 localStorage 里，请求时只发给本机后端（127.0.0.1），不会上传到第三方。
+      Key 在 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer" style="color:var(--accent)">platform.deepseek.com</a> 创建。
+    </div>
+  </div>
 
   <div class="card">
     <textarea id="input" placeholder="例如：求 k 从 1 到 n 的 k 平方&#10;或者：积分从 0 到无穷 e 的负 x 平方 dx&#10;Ctrl / ⌘ + Enter 直接生成"></textarea>
@@ -120,12 +135,45 @@ const altsBox = $('alts'), thumb = $('thumb'), ocrBtn = $('ocr')
 let current = null
 let pendingImage = null
 let history = []
+let serverAuth = 'none'
+
+// ---- 自带 Key：只存本机 localStorage ----
+const KEY_STORAGE = 'nl2tex.apiKey'
+const getKey = () => localStorage.getItem(KEY_STORAGE) || ''
+const authHeaders = () => (getKey() ? { 'x-nl2tex-key': getKey() } : {})
+
+function refreshStatus() {
+  const s = $('status')
+  const hasKey = !!getKey()
+  const mode = hasKey ? 'user-key' : serverAuth
+  const label =
+    mode === 'user-key' ? '自带 Key' :
+    mode === 'env-key' ? '环境变量 Key' :
+    mode === 'dsh' ? '本机账号' : '未配置 Key'
+  s.textContent = `${label} · deepseek-flash`
+  s.className = 'badge ' + (mode === 'none' ? 'warn' : 'ok')
+  $('keyInput').value = getKey()
+}
+
+$('settingsBtn').onclick = () => { $('settingsCard').hidden = !$('settingsCard').hidden }
+$('keySave').onclick = () => {
+  const v = $('keyInput').value.trim()
+  if (!v) return
+  localStorage.setItem(KEY_STORAGE, v)
+  refreshStatus()
+  toast('Key 已保存到本机')
+}
+$('keyClear').onclick = () => {
+  localStorage.removeItem(KEY_STORAGE)
+  $('keyInput').value = ''
+  refreshStatus()
+  toast('已清除本机 Key')
+}
 
 fetch('/api/health').then(r => r.json()).then(h => {
-  const s = $('status')
-  s.textContent = `鉴权 ${h.auth} · ${h.model}`
-  s.className = 'badge ' + (h.auth === 'none' ? 'warn' : 'ok')
-}).catch(() => {})
+  serverAuth = h.auth
+  refreshStatus()
+}).catch(() => { refreshStatus() })
 
 const toast = (msg) => {
   const t = $('toast'); t.textContent = msg; t.classList.add('show')
@@ -205,7 +253,7 @@ async function run() {
   try {
     const res = await fetch('/api/nl2tex', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ text, subject: subject.value, thinking: thinking.checked }),
     })
     const data = await res.json()
@@ -226,7 +274,7 @@ async function runOcr() {
   try {
     const res = await fetch('/api/ocr', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ image: pendingImage, subject: subject.value }),
     })
     const data = await res.json()
@@ -303,6 +351,7 @@ $('again').onclick = run
 
 // ?q= 直接出结果
 const params = new URLSearchParams(location.search)
+if (params.get('settings')) $('settingsCard').hidden = false
 if (params.get('q')) {
   input.value = params.get('q')
   if (params.get('subject')) subject.value = params.get('subject')

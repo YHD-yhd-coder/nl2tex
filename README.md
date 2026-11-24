@@ -22,7 +22,7 @@
 - **图片识别**：直接 `Ctrl+V` 粘贴公式截图，或选图片，走同一个模型（`deepseek-flash` 原生视觉）
 - **多种导出**：LaTeX、`$...$`、MathML、Word 公式（OMML）
 - **六个学科**：数学 / 物理 / 化学 / 计算机 / 经济统计 / 生物，各有专属规则（化学强制 `\ce{}`、物理带单位写法等）
-- **两种鉴权**：复用本机 DSH 已登录的 DeepSeek 账号，或自己的 API Key
+- **两种鉴权**：在页面里填自己的 DeepSeek API Key（推荐），或用环境变量；本机登录过 DSH 的话也能直接复用账号
 - **本地优先**：只监听 `127.0.0.1`，公式不出本机（除了发给模型）
 - **零构建**：纯 ESM + 原生 Node，`git clone` 完就能跑
 
@@ -31,22 +31,25 @@
 需要 Node ≥ 20。
 
 ```bash
-git clone <repo> nl2tex && cd nl2tex
+git clone https://github.com/YHD-yhd-coder/nl2tex.git && cd nl2tex
 pnpm install          # 或 npm install
 pnpm start            # 打开 http://127.0.0.1:8777
 ```
 
-鉴权二选一：
+然后点右上角 **⚙ 设置**，填入你自己的 DeepSeek API Key（[在这里创建](https://platform.deepseek.com/api_keys)）。
+
+**自带 Key，费用你自己承担**：单次约 ¥0.001，充 ¥10 够用几千次。Key 只存在你本机的浏览器 `localStorage`，请求时只发给本机后端。
+
+也支持其它两种方式（按优先级）：
 
 ```bash
-# 方式 A：本机已登录 DSH，直接复用（推荐）
-# 无需任何配置
-
-# 方式 B：自己的 API Key
+# 环境变量
 export DEEPSEEK_API_KEY=sk-xxxx     # Windows: $env:DEEPSEEK_API_KEY="sk-xxxx"
+
+# 或者：本机已登录 DSH，直接复用它的账号（本地开发方便，不用另配 Key）
 ```
 
-启动后终端会打印当前用的是哪种鉴权。
+> 注意：DSH 账号模式依赖 DSH 的登录态文件，只适合本机自用。开源分发时请让用户用自己的 Key。
 
 ## 命令行
 

@@ -1,6 +1,6 @@
 {
   "name": "nl2tex",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "把中文/英文的自然语言描述转成可编译的 LaTeX 公式，并做 KaTeX 编译校验",
   "type": "module",
   "license": "MIT",
