@@ -9,7 +9,7 @@
 输出：\sum_{k=1}^{n} k^{2}
 ```
 
-![界面](docs/screenshot.png)
+![演示](docs/demo.gif)
 
 ## 它解决什么问题
 

@@ -23,7 +23,8 @@
     "cli": "node cli.mjs",
     "test": "node test/run.mjs",
     "test:ocr": "node test/ocr.mjs",
-    "bench": "node bench.mjs"
+    "bench": "node bench.mjs",
+    "demo": "node scripts/demo-gif.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -31,5 +32,10 @@
   "dependencies": {
     "katex": "^0.16.11",
     "mathml2omml": "^0.5.0"
+  },
+  "devDependencies": {
+    "gifenc": "^1.0.3",
+    "pngjs": "^7.0.0",
+    "puppeteer-core": "^25.18.1"
   }
 }
