@@ -1,31 +1,40 @@
 @echo off
-chcp 65001 >nul
+setlocal
 cd /d "%~dp0"
+title nl2tex
 
-where node >nul 2>nul
-if errorlevel 1 (
-  echo.
-  echo  [nl2tex] 没有找到 Node.js
-  echo  请先安装：https://nodejs.org/  ^(选 LTS^)
+echo.
+echo   nl2tex - natural language / screenshots  ->  LaTeX
+echo   ---------------------------------------------------
+echo.
+
+if not exist "%~dp0node.exe" (
+  echo   [ERROR] node.exe is missing.
+  echo   You probably opened this file from inside the zip.
+  echo   Please EXTRACT the whole zip to a folder first,
+  echo   then double-click start.cmd there.
   echo.
   pause
   exit /b 1
 )
 
-if not exist node_modules (
-  echo  [nl2tex] 首次运行，正在安装依赖...
-  call npm install --no-audit --no-fund
-  if errorlevel 1 (
-    echo  [nl2tex] 依赖安装失败
-    pause
-    exit /b 1
-  )
+if not exist "%~dp0server.mjs" (
+  echo   [ERROR] server.mjs is missing. Please extract the whole zip.
+  echo.
+  pause
+  exit /b 1
 )
 
+echo   Starting http://127.0.0.1:8777
+echo   The browser will open in a few seconds.
+echo   Close this window to stop the server.
 echo.
-echo  [nl2tex] 正在启动 http://127.0.0.1:8777
-echo  关闭这个窗口即停止服务
+
+start "" cmd /c "timeout /t 2 >nul & start http://127.0.0.1:8777"
+"%~dp0node.exe" server.mjs
+
 echo.
-start "" http://127.0.0.1:8777
-node server.mjs
-pause
+echo   Server stopped. If this happened immediately,
+echo   the port 8777 may already be used by another program.
+echo   Press any key to close.
+pause >nul
