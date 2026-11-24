@@ -7,7 +7,8 @@ import { dirname, extname, join, normalize as pathNormalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { nl2latex, nl2latexFromImage } from './src/core.mjs'
-import { resolveAuth, config } from './src/providers.mjs'
+import { resolveAuth } from './src/providers.mjs'
+import { PRESETS, PRESET_KEYS } from './src/presets.mjs'
 import { SUBJECT_KEYS } from './src/prompt.mjs'
 import { hasMhchem } from './src/validate.mjs'
 import { toMathML, toOMML } from './src/export.mjs'
@@ -86,12 +87,16 @@ const server = createServer(async (req, res) => {
         JSON.stringify({
           ok: true,
           auth,
-          model: config.model,
+          presets: PRESET_KEYS,
           subjects: SUBJECT_KEYS,
           mhchem: hasMhchem(),
-          version: '0.3.0',
+          version: '0.4.0',
         }),
       )
+    }
+
+    if (req.method === 'GET' && path === '/api/presets') {
+      return send(res, 200, JSON.stringify({ presets: PRESETS, order: PRESET_KEYS }))
     }
 
     if (req.method === 'POST' && path === '/api/nl2tex') {
@@ -101,10 +106,9 @@ const server = createServer(async (req, res) => {
       }
       const result = await nl2latex(body.text, {
         subject: body.subject,
-        model: body.model,
         thinking: !!body.thinking,
         cache: body.cache !== false,
-        apiKey: req.headers['x-nl2tex-key'],
+        provider: providerFrom(req),
       })
       return send(res, 200, JSON.stringify(result))
     }
@@ -119,7 +123,7 @@ const server = createServer(async (req, res) => {
         {
           subject: body.subject,
           thinking: !!body.thinking,
-          apiKey: req.headers['x-nl2tex-key'],
+          provider: providerFrom(req),
         },
       )
       return send(res, 200, JSON.stringify(result))
@@ -144,13 +148,24 @@ const server = createServer(async (req, res) => {
   }
 })
 
+/** 从请求头还原供应商配置（浏览器端只发非敏感字段 + Key） */
+function providerFrom(req) {
+  const h = req.headers
+  return {
+    id: h['x-nl2tex-provider'] || 'deepseek',
+    format: h['x-nl2tex-format'] || undefined,
+    baseUrl: h['x-nl2tex-base'] || undefined,
+    model: h['x-nl2tex-model'] || undefined,
+    apiKey: h['x-nl2tex-key'] || undefined,
+  }
+}
+
 server.listen(PORT, '127.0.0.1', () => {
   let auth = '未配置'
   try {
     auth = resolveAuth().kind
   } catch {}
   console.log(`nl2tex 已启动  http://127.0.0.1:${PORT}`)
-  console.log(`鉴权方式     ${auth}`)
-  console.log(`默认模型     ${config.model}`)
+  console.log(`服务端鉴权   ${auth}（用户也可在网页里用自己的 Key）`)
   console.log(`按 Ctrl+C 停止`)
 })

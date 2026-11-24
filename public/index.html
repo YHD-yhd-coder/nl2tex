@@ -22,13 +22,17 @@
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 18px; }
   textarea { width: 100%; min-height: 92px; resize: vertical; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font: inherit; outline: none; }
   textarea:focus { border-color: var(--accent); }
+  input[type=text], input[type=password], select {
+    background: #0d0f13; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 12px; font: inherit; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
-  select, button { background: #1d222b; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font: inherit; cursor: pointer; }
+  button { background: #1d222b; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font: inherit; cursor: pointer; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
   button:disabled { opacity: .55; cursor: default; }
   label.toggle { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; cursor: pointer; }
   .spacer { flex: 1; }
-  .result { margin-top: 18px; }
   .math { overflow-x: auto; padding: 14px 4px; }
   .math .katex-display { margin: 0; }
   .src { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: #0d0f13; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; white-space: pre-wrap; word-break: break-all; color: #b9c4dc; }
@@ -56,25 +60,34 @@
     <span class="sub">自然语言 / 图片 → LaTeX → 编译校验</span>
     <span class="spacer"></span>
     <span id="status" class="badge">检测中…</span>
-    <button id="settingsBtn" style="padding:5px 10px;font-size:12px">⚙ 设置</button>
+    <button id="settingsBtn" style="padding:5px 10px;font-size:12px">设置</button>
   </header>
 
   <div class="card" id="settingsCard" hidden>
-    <div class="sub" style="margin-bottom:8px">DeepSeek API Key（自带 Key，费用由你自己承担）</div>
+    <div class="sub" style="margin-bottom:8px">模型供应商（Key 由你自己提供，费用自己承担）</div>
     <div class="row" style="margin-top:0">
-      <input id="keyInput" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false"
-             style="flex:1;min-width:260px;background:#0d0f13;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font:inherit" />
+      <select id="provider" style="min-width:180px"></select>
+      <span class="spacer"></span>
+      <span class="hint" id="providerNote"></span>
+    </div>
+    <div class="row">
+      <input id="baseUrl" type="text" placeholder="Base URL" autocomplete="off" spellcheck="false" style="flex:1;min-width:240px" />
+      <input id="model" type="text" placeholder="模型名" autocomplete="off" spellcheck="false" list="modelList" style="width:220px" />
+      <datalist id="modelList"></datalist>
+    </div>
+    <div class="row">
+      <input id="keyInput" type="password" placeholder="API Key（各家自己的格式）" autocomplete="off" spellcheck="false" style="flex:1;min-width:260px" />
       <button id="keySave" class="primary">保存</button>
       <button id="keyClear">清除</button>
     </div>
     <div class="hint">
-      只保存在你这台机器的浏览器 localStorage 里，请求时只发给本机后端（127.0.0.1），不会上传到第三方。
-      Key 在 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer" style="color:var(--accent)">platform.deepseek.com</a> 创建。
+      全部只存在你这台机器的浏览器 localStorage 里，请求只发给本机后端（127.0.0.1）。
+      <span id="keyLink"></span>
     </div>
   </div>
 
   <div class="card">
-    <textarea id="input" placeholder="例如：求 k 从 1 到 n 的 k 平方&#10;或者：积分从 0 到无穷 e 的负 x 平方 dx&#10;Ctrl / ⌘ + Enter 直接生成"></textarea>
+    <textarea id="input" placeholder="例如：求 k 从 1 到 n 的 k 平方&#10;或者：积分从 0 到无穷 e 的负 x 平方 dx&#10;Ctrl / Cmd + Enter 直接生成"></textarea>
     <div class="row">
       <select id="subject">
         <option value="math">数学</option>
@@ -93,7 +106,7 @@
         <button id="pick" style="padding:2px 8px;font-size:12px">选择图片</button>
         <input type="file" id="file" accept="image/*" hidden />
       </div>
-      <img id="thumb" class="thumb" hidden />
+      <img id="thumb" class="thumb" hidden alt="" />
       <button id="ocr" hidden>识别图片</button>
     </div>
     <div class="hint">不计算、不化简，只做转写；有歧义时会给低置信度、说明，以及多个候选。</div>
@@ -135,48 +148,122 @@ const altsBox = $('alts'), thumb = $('thumb'), ocrBtn = $('ocr')
 let current = null
 let pendingImage = null
 let history = []
-let serverAuth = 'none'
 
-// ---- 自带 Key：只存本机 localStorage ----
-const KEY_STORAGE = 'nl2tex.apiKey'
-const getKey = () => localStorage.getItem(KEY_STORAGE) || ''
-const authHeaders = () => (getKey() ? { 'x-nl2tex-key': getKey() } : {})
+// ---- 供应商配置：只存本机 localStorage ----
+const CFG_STORAGE = 'nl2tex.config'
+let presets = {}
+let presetOrder = []
+let serverAuth = 'none'
+let cfg = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(CFG_STORAGE)) || {}
+  } catch {
+    return {}
+  }
+})()
+if (!cfg.providerId) cfg.providerId = 'deepseek'
+
+const currentPreset = () => presets[cfg.providerId] || { label: cfg.providerId, format: 'anthropic' }
+const currentBase = () => cfg.baseUrl || currentPreset().baseUrl || ''
+
+function saveCfgLocal() {
+  localStorage.setItem(CFG_STORAGE, JSON.stringify(cfg))
+}
+
+function providerHeaders() {
+  const p = currentPreset()
+  const h = { 'x-nl2tex-provider': cfg.providerId }
+  if (p.format) h['x-nl2tex-format'] = p.format
+  const base = currentBase()
+  if (base) h['x-nl2tex-base'] = base
+  if (cfg.model) h['x-nl2tex-model'] = cfg.model
+  if (cfg.key) h['x-nl2tex-key'] = cfg.key
+  return h
+}
 
 function refreshStatus() {
   const s = $('status')
-  const hasKey = !!getKey()
-  const mode = hasKey ? 'user-key' : serverAuth
-  const label =
-    mode === 'user-key' ? '自带 Key' :
-    mode === 'env-key' ? '环境变量 Key' :
-    mode === 'dsh' ? '本机账号' : '未配置 Key'
-  s.textContent = `${label} · deepseek-flash`
-  s.className = 'badge ' + (mode === 'none' ? 'warn' : 'ok')
-  $('keyInput').value = getKey()
+  const p = currentPreset()
+  const mode = cfg.key
+    ? '自带 Key'
+    : p.keyless || serverAuth === 'dsh'
+      ? '本机账号'
+      : serverAuth === 'env-key'
+        ? '环境变量 Key'
+        : '未配置 Key'
+  const model = cfg.model || p.defaultModel || ''
+  s.textContent = mode + ' · ' + (model || p.label)
+  s.className = 'badge ' + (cfg.key || p.keyless || serverAuth !== 'none' ? 'ok' : 'warn')
 }
 
-$('settingsBtn').onclick = () => { $('settingsCard').hidden = !$('settingsCard').hidden }
-$('keySave').onclick = () => {
-  const v = $('keyInput').value.trim()
-  if (!v) return
-  localStorage.setItem(KEY_STORAGE, v)
+function applyPresetToForm() {
+  const p = currentPreset()
+  $('baseUrl').value = cfg.baseUrl || p.baseUrl || ''
+  $('model').value = cfg.model || p.defaultModel || ''
+  $('keyInput').value = cfg.key || ''
+  $('providerNote').textContent = p.note || ''
+  $('modelList').innerHTML = (p.models || []).map((m) => '<option value="' + m + '">').join('')
+  $('keyLink').innerHTML = p.keyUrl
+    ? 'Key 在 <a href="' + p.keyUrl + '" target="_blank" rel="noreferrer" style="color:var(--accent)">这里</a> 创建。'
+    : ''
+  $('keyInput').disabled = !!p.keyless
+  $('keyInput').placeholder = p.keyless ? '该供应商不需要 Key（用本机 DSH 登录态）' : 'API Key（各家自己的格式）'
   refreshStatus()
-  toast('Key 已保存到本机')
 }
+
+function buildProviderSelect() {
+  $('provider').innerHTML = presetOrder
+    .map((id) => '<option value="' + id + '">' + presets[id].label + '</option>')
+    .join('')
+  $('provider').value = cfg.providerId
+}
+
+$('settingsBtn').onclick = () => {
+  $('settingsCard').hidden = !$('settingsCard').hidden
+}
+
+$('provider').onchange = () => {
+  cfg.providerId = $('provider').value
+  cfg.baseUrl = ''
+  cfg.model = ''
+  applyPresetToForm()
+}
+
+$('keySave').onclick = () => {
+  cfg.baseUrl = $('baseUrl').value.trim()
+  cfg.model = $('model').value.trim()
+  cfg.key = $('keyInput').value.trim()
+  saveCfgLocal()
+  refreshStatus()
+  toast('已保存到本机')
+}
+
 $('keyClear').onclick = () => {
-  localStorage.removeItem(KEY_STORAGE)
+  cfg.key = ''
+  saveCfgLocal()
   $('keyInput').value = ''
   refreshStatus()
   toast('已清除本机 Key')
 }
 
-fetch('/api/health').then(r => r.json()).then(h => {
-  serverAuth = h.auth
-  refreshStatus()
-}).catch(() => { refreshStatus() })
+Promise.all([
+  fetch('/api/presets').then((r) => r.json()),
+  fetch('/api/health').then((r) => r.json()).catch(() => ({ auth: 'none' })),
+])
+  .then(([p, h]) => {
+    presets = p.presets
+    presetOrder = p.order
+    serverAuth = h.auth || 'none'
+    buildProviderSelect()
+    applyPresetToForm()
+  })
+  .catch(() => refreshStatus())
 
+// ---- 渲染 ----
 const toast = (msg) => {
-  const t = $('toast'); t.textContent = msg; t.classList.add('show')
+  const t = $('toast')
+  t.textContent = msg
+  t.classList.add('show')
   setTimeout(() => t.classList.remove('show'), 1400)
 }
 
@@ -187,9 +274,9 @@ function render(result) {
   src.textContent = result.latex || '(空)'
   const conf = result.confidence ?? 0
   meta.innerHTML = [
-    `<span style="color:${result.valid ? 'var(--ok)' : 'var(--err)'}">${result.valid ? '编译通过' : '编译失败'}</span>`,
-    `<span>置信度 ${conf.toFixed(2)}</span>`,
-    `<span>${result.subject}</span>`,
+    '<span style="color:' + (result.valid ? 'var(--ok)' : 'var(--err)') + '">' + (result.valid ? '编译通过' : '编译失败') + '</span>',
+    '<span>置信度 ' + conf.toFixed(2) + '</span>',
+    '<span>' + result.subject + '</span>',
     result.mode === 'image' ? '<span>图片识别</span>' : '',
     result.retried ? '<span>已重试一次</span>' : '',
     result.cached ? '<span>缓存命中</span>' : '',
@@ -199,48 +286,56 @@ function render(result) {
   note.textContent = result.note || ''
   err.hidden = result.valid
   err.textContent = result.valid ? '' : (result.error || '未知错误')
-  timing.textContent = `${result.ms} ms`
+  timing.textContent = result.ms + ' ms'
 
-  // 候选
   altsBox.innerHTML = ''
   if (result.alternatives && result.alternatives.length > 1) {
     result.alternatives.forEach((a, i) => {
       const b = document.createElement('button')
-      b.textContent = `${i + 1}. ${a.label}`
+      b.textContent = (i + 1) + '. ' + a.label
       if (i === 0) b.classList.add('active')
       b.onclick = () => {
-        ;[...altsBox.children].forEach(c => c.classList.remove('active'))
+        Array.from(altsBox.children).forEach((c) => c.classList.remove('active'))
         b.classList.add('active')
         math.innerHTML = a.html
         src.textContent = a.latex
-        current = { ...result, latex: a.latex, html: a.html }
+        current = Object.assign({}, result, { latex: a.latex, html: a.html })
       }
       altsBox.appendChild(b)
     })
   }
 }
 
+const escapeHtml = (s) =>
+  String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
 function addHistory(text, latex) {
   history.unshift({ text, latex })
   history = history.slice(0, 8)
   $('history').innerHTML = history
-    .map((h, i) => `<li data-i="${i}"><span>${escapeHtml(h.text)}</span> → <code>${escapeHtml(h.latex)}</code></li>`)
+    .map((h, i) => '<li data-i="' + i + '"><span>' + escapeHtml(h.text) + '</span> → <code>' + escapeHtml(h.latex) + '</code></li>')
     .join('')
-  document.querySelectorAll('#history li').forEach(li => {
-    li.onclick = () => { input.value = history[Number(li.dataset.i)].text; input.focus() }
+  Array.from(document.querySelectorAll('#history li')).forEach((li) => {
+    li.onclick = () => {
+      input.value = history[Number(li.dataset.i)].text
+      input.focus()
+    }
   })
 }
-const escapeHtml = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
 function busy(on, label) {
-  go.disabled = on; ocrBtn.disabled = on
+  go.disabled = on
+  ocrBtn.disabled = on
   go.textContent = on ? '生成中…' : '生成公式'
   if (label) ocrBtn.textContent = label
 }
 
 function showError(message) {
   card.hidden = false
-  math.innerHTML = ''; src.textContent = ''; meta.innerHTML = ''; altsBox.innerHTML = ''
+  math.innerHTML = ''
+  src.textContent = ''
+  meta.innerHTML = ''
+  altsBox.innerHTML = ''
   note.hidden = true
   err.hidden = false
   err.textContent = message
@@ -253,11 +348,11 @@ async function run() {
   try {
     const res = await fetch('/api/nl2tex', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ text, subject: subject.value, thinking: thinking.checked }),
+      headers: Object.assign({ 'content-type': 'application/json' }, providerHeaders()),
+      body: JSON.stringify({ text: text, subject: subject.value, thinking: thinking.checked }),
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status))
     render(data)
     if (data.valid && data.latex) addHistory(text, data.latex)
   } catch (e) {
@@ -274,11 +369,11 @@ async function runOcr() {
   try {
     const res = await fetch('/api/ocr', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...authHeaders() },
+      headers: Object.assign({ 'content-type': 'application/json' }, providerHeaders()),
       body: JSON.stringify({ image: pendingImage, subject: subject.value }),
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status))
     render(data)
     if (data.valid && data.latex) addHistory('（图片）', data.latex)
   } catch (e) {
@@ -296,9 +391,9 @@ function setImage(dataUrl) {
   ocrBtn.hidden = false
 }
 
-// 粘贴图片
 document.addEventListener('paste', (e) => {
-  const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'))
+  const items = Array.from((e.clipboardData && e.clipboardData.items) || [])
+  const item = items.find((i) => i.type.startsWith('image/'))
   if (!item) return
   e.preventDefault()
   const file = item.getAsFile()
@@ -309,7 +404,7 @@ document.addEventListener('paste', (e) => {
 
 $('pick').onclick = () => $('file').click()
 $('file').onchange = (e) => {
-  const file = e.target.files?.[0]
+  const file = e.target.files && e.target.files[0]
   if (!file) return
   const reader = new FileReader()
   reader.onload = () => setImage(reader.result)
@@ -322,14 +417,13 @@ input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run() }
 })
 
-// 导出 / 复制
-document.querySelectorAll('[data-copy]').forEach(btn => {
+document.querySelectorAll('[data-copy]').forEach((btn) => {
   btn.onclick = async () => {
-    if (!current?.latex) return
+    if (!current || !current.latex) return
     const kind = btn.dataset.copy
     try {
       let text = current.latex
-      if (kind === 'dollar') text = `$${current.latex}$$`
+      if (kind === 'dollar') text = '$' + current.latex + '$'
       if (kind === 'mathml' || kind === 'omml') {
         const r = await fetch('/api/export', {
           method: 'POST',
@@ -349,7 +443,6 @@ document.querySelectorAll('[data-copy]').forEach(btn => {
 })
 $('again').onclick = run
 
-// ?q= 直接出结果
 const params = new URLSearchParams(location.search)
 if (params.get('settings')) $('settingsCard').hidden = false
 if (params.get('q')) {

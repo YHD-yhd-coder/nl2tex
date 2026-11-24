@@ -23,6 +23,7 @@
 - **多种导出**：LaTeX、`$...$`、MathML、Word 公式（OMML）
 - **六个学科**：数学 / 物理 / 化学 / 计算机 / 经济统计 / 生物，各有专属规则（化学强制 `\ce{}`、物理带单位写法等）
 - **两种鉴权**：在页面里填自己的 DeepSeek API Key（推荐），或用环境变量；本机登录过 DSH 的话也能直接复用账号
+- **多家供应商**：DeepSeek / Kimi / 智谱 / 通义千问 / SiliconFlow / OpenRouter，或任何 OpenAI 兼容网关
 - **本地优先**：只监听 `127.0.0.1`，公式不出本机（除了发给模型）
 - **零构建**：纯 ESM + 原生 Node，`git clone` 完就能跑
 
@@ -30,26 +31,45 @@
 
 需要 Node ≥ 20。
 
+**Windows**：双击 `start.cmd` —— 自动装依赖、启动服务、打开浏览器。
+
+**macOS / Linux**：
+
 ```bash
 git clone https://github.com/YHD-yhd-coder/nl2tex.git && cd nl2tex
-pnpm install          # 或 npm install
-pnpm start            # 打开 http://127.0.0.1:8777
+./start.sh
 ```
 
-然后点右上角 **⚙ 设置**，填入你自己的 DeepSeek API Key（[在这里创建](https://platform.deepseek.com/api_keys)）。
-
-**自带 Key，费用你自己承担**：单次约 ¥0.001，充 ¥10 够用几千次。Key 只存在你本机的浏览器 `localStorage`，请求时只发给本机后端。
-
-也支持其它两种方式（按优先级）：
+也可以手动：
 
 ```bash
-# 环境变量
-export DEEPSEEK_API_KEY=sk-xxxx     # Windows: $env:DEEPSEEK_API_KEY="sk-xxxx"
-
-# 或者：本机已登录 DSH，直接复用它的账号（本地开发方便，不用另配 Key）
+npm install        # 或 pnpm install
+npm start          # 打开 http://127.0.0.1:8777
 ```
 
-> 注意：DSH 账号模式依赖 DSH 的登录态文件，只适合本机自用。开源分发时请让用户用自己的 Key。
+第一次打开后，点右上角 **设置** → 选一个供应商 → 填自己的 API Key → 保存。Key 只存在本机浏览器 `localStorage`，请求只发给本机后端。
+
+**费用自己承担**：DeepSeek 单次约 ¥0.001，充 ¥10 够用几千次。
+
+## 支持的模型供应商
+
+页面里直接选，预设都填好了 base URL 和模型名，只需要填 Key：
+
+| 供应商 | 协议 | 默认模型 | Key 申请 |
+|---|---|---|---|
+| **DeepSeek** | Anthropic | `deepseek-flash` | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
+| **Kimi（月之暗面）** | OpenAI 兼容 | `kimi-k2.6` | [platform.kimi.ai](https://platform.kimi.ai) |
+| **智谱 GLM** | OpenAI 兼容 | `glm-4.6` | [open.bigmodel.cn](https://open.bigmodel.cn/usercenter/apikeys) |
+| **通义千问** | OpenAI 兼容 | `qwen-plus` | [百炼控制台](https://bailian.console.aliyun.com/) |
+| **SiliconFlow** | OpenAI 兼容 | `deepseek-ai/DeepSeek-V3` | [cloud.siliconflow.cn](https://cloud.siliconflow.cn/account/ak) |
+| **OpenRouter** | OpenAI 兼容 | `deepseek/deepseek-chat` | [openrouter.ai](https://openrouter.ai/keys) |
+| **自定义** | OpenAI 兼容 | 自己填 | 任何兼容网关 |
+
+> **关于 WorkBuddy**：它开放平台提供的是 OAuth 授权 + 分享/deeplink 能力，**不是模型推理 API**，所以不能作为生成后端。如果以后想接，合理的方式是"生成完一键分享到 WorkBuddy"，而不是把它当模型。
+
+> 图片识别要求模型支持视觉：DeepSeek `deepseek-flash` 支持；Kimi K3 支持；部分开源模型不支持，会返回错误。
+
+> 本机登录过 DSH 的话，还有"本机 DSH 登录"选项，不用填 Key。但它依赖 DSH 的登录态文件，只适合本机自用，开源分发请让用户用自己的 Key。
 
 ## 命令行
 

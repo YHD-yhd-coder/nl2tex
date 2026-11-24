@@ -1,11 +1,11 @@
-/** 核心流程：描述/图片 -> 模型 -> JSON 解析 -> KaTeX 校验 -> (失败则带错误重试一次) */
+/** 核心流程：描述/图片 → 模型 → JSON 解析 → KaTeX 校验 → (失败则带错误重试一次) */
 
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { chat, config } from './providers.mjs'
+import { chat } from './providers.mjs'
 import { buildOcrSystem, buildSystem, SUBJECT_KEYS } from './prompt.mjs'
 import { normalize, validate } from './validate.mjs'
 
@@ -54,7 +54,10 @@ export function parseModelJson(raw) {
         .filter((a) => a && typeof a.latex === 'string' && a.latex.trim())
         .slice(0, MAX_ALTERNATIVES)
         .map((a) => ({
-          label: typeof a.label === 'string' && a.label.trim() ? a.label.trim().slice(0, 24) : '另一种写法',
+          label:
+            typeof a.label === 'string' && a.label.trim()
+              ? a.label.trim().slice(0, 24)
+              : '另一种写法',
           latex: normalize(a.latex),
         }))
     : []
@@ -68,7 +71,7 @@ export function parseModelJson(raw) {
   }
 }
 
-/** 校验候选列表：以主公式开头，去重，最多 3 个，保留能编译的 */
+/** 校验候选列表：以主公式开头，去重，最多 3 个，只保留能编译的 */
 function buildAlternatives(primaryLatex, primaryHtml, list) {
   const out = []
   const seen = new Set()
@@ -107,11 +110,11 @@ function addUsage(a = {}, b = {}) {
  * @param {object} p
  * @param {string} p.text
  * @param {string} p.subject
- * @param {string} p.model
+ * @param {object} p.provider  { id, format, baseUrl, model, apiKey }
  * @param {boolean} p.thinking
  * @param {{data:string, mediaType:string}|null} p.image
  */
-async function generate({ text, subject, model, thinking, image, apiKey }) {
+async function generate({ text, subject, provider, thinking, image }) {
   const system = image ? buildOcrSystem(subject) : buildSystem(subject)
   const userText = image ? '识别图片中的公式。' : text
 
@@ -121,7 +124,7 @@ async function generate({ text, subject, model, thinking, image, apiKey }) {
   ]
 
   const started = performance.now()
-  const first = await chat({ messages, model, thinking, image, apiKey })
+  const first = await chat({ messages, provider, thinking, image })
   let usage = { ...first.usage }
   let parsed
   let compile
@@ -142,12 +145,15 @@ async function generate({ text, subject, model, thinking, image, apiKey }) {
         content: image
           ? buildOcrSystem(subject)
           : buildSystem(subject, {
-              retry: { error: compile.error, previous: parsed?.latex ?? first.text.slice(0, 200) },
+              retry: {
+                error: compile.error,
+                previous: parsed?.latex ?? first.text.slice(0, 200),
+              },
             }),
       },
       { role: 'user', content: userText },
     ]
-    const second = await chat({ messages: retryMessages, model, thinking: false, image, apiKey })
+    const second = await chat({ messages: retryMessages, provider, thinking: false, image })
     usage = addUsage(usage, second.usage)
     parsed = parseModelJson(second.text)
     compile = validate(parsed.latex, { display: parsed.display })
@@ -158,7 +164,8 @@ async function generate({ text, subject, model, thinking, image, apiKey }) {
     compile,
     usage,
     retried,
-    model,
+    model: first.model,
+    baseUrl: first.baseUrl,
     ms: Math.round(performance.now() - started),
   }
 }
@@ -176,7 +183,11 @@ function finalize({ input, subject, gen, mode }) {
     valid: compile.ok,
     error: compile.ok ? null : compile.error,
     html: compile.ok ? compile.html : null,
-    alternatives: buildAlternatives(parsed.latex, compile.ok ? compile.html : null, parsed.alternatives),
+    alternatives: buildAlternatives(
+      parsed.latex,
+      compile.ok ? compile.html : null,
+      parsed.alternatives,
+    ),
     retried,
     model,
     usage,
@@ -188,17 +199,17 @@ function finalize({ input, subject, gen, mode }) {
 /**
  * 自然语言 -> LaTeX
  * @param {string} text
- * @param {{subject?:string, model?:string, cache?:boolean, thinking?:boolean, apiKey?:string}} [opts]
+ * @param {{subject?:string, cache?:boolean, thinking?:boolean, provider?:object}} [opts]
  */
 export async function nl2latex(text, opts = {}) {
   const input = String(text ?? '').trim()
   if (!input) throw new Error('描述不能为空')
 
   const subject = SUBJECT_KEYS.includes(opts.subject) ? opts.subject : 'math'
-  const model = opts.model || config.model
+  const provider = opts.provider || {}
   const useCache = opts.cache !== false
 
-  const key = keyOf('text', model, subject, input)
+  const key = keyOf('text', provider.id || 'deepseek', provider.model || '', subject, input)
   if (useCache) {
     const hit = loadCache()[key]
     if (hit) return { ...hit, cached: true }
@@ -207,10 +218,9 @@ export async function nl2latex(text, opts = {}) {
   const gen = await generate({
     text: input,
     subject,
-    model,
+    provider,
     thinking: !!opts.thinking,
     image: null,
-    apiKey: opts.apiKey,
   })
   const result = finalize({ input, subject, gen, mode: 'text' })
 
@@ -224,7 +234,7 @@ export async function nl2latex(text, opts = {}) {
 /**
  * 图片 -> LaTeX
  * @param {{data:string, mediaType?:string}} image  base64（不带 data: 前缀）
- * @param {{subject?:string, model?:string, thinking?:boolean, apiKey?:string}} [opts]
+ * @param {{subject?:string, thinking?:boolean, provider?:object}} [opts]
  */
 export async function nl2latexFromImage(image, opts = {}) {
   if (!image?.data) throw new Error('缺少图片数据')
@@ -232,15 +242,14 @@ export async function nl2latexFromImage(image, opts = {}) {
   if (data.length > 12 * 1024 * 1024) throw new Error('图片过大（base64 上限 12MB）')
 
   const subject = SUBJECT_KEYS.includes(opts.subject) ? opts.subject : 'math'
-  const model = opts.model || config.model
+  const provider = opts.provider || {}
 
   const gen = await generate({
     text: '',
     subject,
-    model,
+    provider,
     thinking: !!opts.thinking,
     image: { data, mediaType: image.mediaType || 'image/png' },
-    apiKey: opts.apiKey,
   })
 
   return finalize({
