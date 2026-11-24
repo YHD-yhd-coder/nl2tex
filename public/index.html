@@ -193,6 +193,14 @@ go.onclick = run
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run() }
 })
+
+// 支持 ?q=描述&subject=math 直接出结果（方便分享/截图）
+const params = new URLSearchParams(location.search)
+if (params.get('q')) {
+  input.value = params.get('q')
+  if (params.get('subject')) subject.value = params.get('subject')
+  run()
+}
 $('copyTex').onclick = () => current && navigator.clipboard.writeText(current.latex)
 $('copyDollar').onclick = () => current && navigator.clipboard.writeText(`$${current.latex}$$`)
 $('again').onclick = run
